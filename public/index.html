@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="CarSee subscription admin panel for managing plans, bonus usage, and audit entries."
+    />
+    <title>CarSee Admin Panel</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <section id="loginView" class="card" aria-labelledby="loginTitle">
+        <h1 id="loginTitle">CarSee Admin Access</h1>
+        <p class="muted">Enter the shared password to continue.</p>
+        <form id="loginForm" novalidate>
+          <label for="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            required
+            autocomplete="current-password"
+            aria-describedby="loginMessage"
+          />
+          <button type="submit">Unlock Admin Panel</button>
+        </form>
+        <p id="loginMessage" class="message" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="appView" class="hidden" aria-labelledby="appTitle">
+        <header class="topbar card">
+          <h1 id="appTitle">Subscription Manager</h1>
+          <button id="logoutBtn" class="secondary" type="button">Logout</button>
+        </header>
+
+        <div class="grid">
+          <section class="card" aria-labelledby="usersTitle">
+            <h2 id="usersTitle">Users</h2>
+            <label for="searchInput" class="srOnly">Search users</label>
+            <input
+              id="searchInput"
+              placeholder="Search by email or name"
+              autocomplete="off"
+            />
+            <div class="tableWrap">
+              <table>
+                <caption class="srOnly">
+                  Admin users table. Select a row to edit a user.
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">User</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Company</th>
+                    <th scope="col">Plan</th>
+                    <th scope="col">Days</th>
+                    <th scope="col">Reports</th>
+                  </tr>
+                </thead>
+                <tbody id="usersTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="editTitle">
+            <h2 id="editTitle">Edit User</h2>
+            <form id="editForm" novalidate>
+              <label for="targetUserId">User ID</label>
+              <input id="targetUserId" readonly />
+
+              <label for="email">Email</label>
+              <input id="email" readonly />
+
+              <label for="planType">Plan</label>
+              <select id="planType">
+                <option value="free">Free</option>
+                <option value="pro">Pro</option>
+                <option value="plus">Plus</option>
+              </select>
+
+              <label for="bonusDays">Bonus Days</label>
+              <input id="bonusDays" type="number" min="0" />
+
+              <label for="bonusReports">Bonus Reports</label>
+              <input id="bonusReports" type="number" min="0" />
+
+              <label for="secondary2">Employee Email #1</label>
+              <input id="secondary2" type="email" autocomplete="email" />
+
+              <label for="secondary3">Employee Email #2</label>
+              <input id="secondary3" type="email" autocomplete="email" />
+
+              <button id="saveBtn" type="submit">Save Changes</button>
+            </form>
+            <p id="saveMessage" class="message" role="status" aria-live="polite"></p>
+          </section>
+        </div>
+
+        <section class="card" aria-labelledby="auditTitle">
+          <h2 id="auditTitle">Recent Audit</h2>
+          <ul id="auditList"></ul>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
