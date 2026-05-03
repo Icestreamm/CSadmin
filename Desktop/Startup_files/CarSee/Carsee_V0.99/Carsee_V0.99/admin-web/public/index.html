@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CarSee Admin Panel</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <section id="loginView" class="card">
+        <h1>CarSee Admin Access</h1>
+        <p class="muted">Enter the shared password to continue.</p>
+        <form id="loginForm">
+          <label for="password">Password</label>
+          <input id="password" type="password" required />
+          <button type="submit">Unlock Admin Panel</button>
+        </form>
+        <p id="loginMessage" class="message"></p>
+      </section>
+
+      <section id="appView" class="hidden">
+        <header class="topbar card">
+          <h1>Subscription Manager</h1>
+          <button id="logoutBtn" class="secondary">Logout</button>
+        </header>
+
+        <div class="grid">
+          <section class="card">
+            <h2>Users</h2>
+            <input id="searchInput" placeholder="Search by email or name" />
+            <div class="tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Email</th>
+                    <th>Company</th>
+                    <th>Plan</th>
+                    <th>Days</th>
+                    <th>Reports</th>
+                  </tr>
+                </thead>
+                <tbody id="usersTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="card">
+            <h2>Edit User</h2>
+            <form id="editForm">
+              <label>User ID</label>
+              <input id="targetUserId" readonly />
+
+              <label>Email</label>
+              <input id="email" readonly />
+
+              <label>Plan</label>
+              <select id="planType">
+                <option value="free">Free</option>
+                <option value="pro">Pro</option>
+                <option value="plus">Plus</option>
+              </select>
+
+              <label>Bonus Days</label>
+              <input id="bonusDays" type="number" min="0" />
+
+              <label>Bonus Reports</label>
+              <input id="bonusReports" type="number" min="0" />
+
+              <label>Secondary Email #2</label>
+              <input id="secondary2" type="email" />
+
+              <label>Secondary Email #3</label>
+              <input id="secondary3" type="email" />
+
+              <button id="saveBtn" type="submit">Save Changes</button>
+            </form>
+            <p id="saveMessage" class="message"></p>
+          </section>
+        </div>
+
+        <section class="card">
+          <h2>Recent Audit</h2>
+          <ul id="auditList"></ul>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
