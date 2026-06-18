@@ -64,6 +64,8 @@
                     <th scope="col">Plan</th>
                     <th scope="col">Days</th>
                     <th scope="col">Reports</th>
+                    <th scope="col">Employee #1</th>
+                    <th scope="col">Employee #2</th>
                   </tr>
                 </thead>
                 <tbody id="usersTable"></tbody>
@@ -96,10 +98,10 @@
             </button>
             <p id="daysMessage" class="message" role="status"></p>
 
-            <label for="bonusReports">Add Bonus Reports</label>
-            <input id="bonusReports" type="number" min="1" placeholder="Amount to add" disabled />
+            <label for="adjustReports">Adjust Reports <span class="muted small">(+ add / − deduct)</span></label>
+            <input id="adjustReports" type="number" placeholder="e.g. 10 or -5" disabled />
             <button id="applyReportsBtn" type="button" class="actionBtn" disabled>
-              Add Bonus Reports
+              Apply Reports Change
             </button>
             <p id="reportsMessage" class="message" role="status"></p>
 

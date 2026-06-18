@@ -13,7 +13,7 @@ const editHint = document.getElementById("editHint");
 const email = document.getElementById("email");
 const planType = document.getElementById("planType");
 const adjustDays = document.getElementById("adjustDays");
-const bonusReports = document.getElementById("bonusReports");
+const adjustReports = document.getElementById("adjustReports");
 const secondary2 = document.getElementById("secondary2");
 const secondary3 = document.getElementById("secondary3");
 
@@ -80,6 +80,13 @@ function setCell(tr, text) {
   tr.appendChild(td);
 }
 
+function employeeEmails(u) {
+  return (u.secondary_emails || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 function renderUsers(rows) {
   usersTable.innerHTML = "";
   userCount.textContent = rows.length ? `(${rows.length})` : "";
@@ -87,7 +94,7 @@ function renderUsers(rows) {
   if (!rows.length) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 6;
+    td.colSpan = 8;
     td.textContent = "No users found";
     td.className = "emptyCell";
     tr.appendChild(td);
@@ -123,6 +130,9 @@ function renderUsers(rows) {
 
     setCell(tr, u.remaining_days ?? "—");
     setCell(tr, u.reports_usage || "— / —");
+    const employees = employeeEmails(u);
+    setCell(tr, employees[0] || "—");
+    setCell(tr, employees[1] || "—");
 
     tr.addEventListener("click", () => selectUser(u));
     tr.addEventListener("keydown", (e) => {
@@ -138,7 +148,7 @@ function renderUsers(rows) {
 function setEditEnabled(enabled) {
   planType.disabled = !enabled;
   adjustDays.disabled = !enabled;
-  bonusReports.disabled = !enabled;
+  adjustReports.disabled = !enabled;
   secondary2.disabled = !enabled;
   secondary3.disabled = !enabled;
   updatePlanBtn.disabled = !enabled;
@@ -152,12 +162,9 @@ function fillForm(u) {
   email.value = u.email || "";
   planType.value = u.plan_type || "free";
   adjustDays.value = "";
-  bonusReports.value = "";
+  adjustReports.value = "";
 
-  const secondaries = (u.secondary_emails || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const secondaries = employeeEmails(u);
   secondary2.value = secondaries[0] || "";
   secondary3.value = secondaries[1] || "";
   setEditEnabled(true);
@@ -280,7 +287,8 @@ async function loadUsers() {
         users.filter((u) => {
           const em = String(u.email || "").toLowerCase();
           const nm = String(u.full_name || "").toLowerCase();
-          return em.includes(q) || nm.includes(q);
+          const emp = employeeEmails(u).join(" ").toLowerCase();
+          return em.includes(q) || nm.includes(q) || emp.includes(q);
         }),
       );
     } else {
@@ -290,7 +298,7 @@ async function loadUsers() {
     usersTable.innerHTML = "";
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 6;
+    td.colSpan = 8;
     td.textContent = `Failed to load users: ${error.message}`;
     td.className = "emptyCell error";
     tr.appendChild(td);
@@ -377,7 +385,8 @@ searchInput.addEventListener("input", () => {
     users.filter((u) => {
       const em = String(u.email || "").toLowerCase();
       const nm = String(u.full_name || "").toLowerCase();
-      return em.includes(q) || nm.includes(q);
+      const emp = employeeEmails(u).join(" ").toLowerCase();
+      return em.includes(q) || nm.includes(q) || emp.includes(q);
     }),
   );
 });
@@ -446,18 +455,22 @@ applyDaysBtn.addEventListener("click", () => {
 });
 
 applyReportsBtn.addEventListener("click", () => {
-  const raw = bonusReports.value.trim();
+  const raw = adjustReports.value.trim();
   if (!raw) {
-    setMessage(reportsMessage, "Enter bonus reports to add");
+    setMessage(reportsMessage, "Enter reports to add (+) or deduct (−)");
     return;
   }
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 1 || n > 999999) {
-    setMessage(reportsMessage, "Bonus reports must be 1–999999");
+  const delta = Number(raw);
+  if (!Number.isFinite(delta) || delta === 0) {
+    setMessage(reportsMessage, "Reports must be a non-zero number");
     return;
   }
-  updateUser({ bonus_reports: n }, reportsMessage, "Bonus reports added");
-  bonusReports.value = "";
+  if (delta < -999999 || delta > 999999) {
+    setMessage(reportsMessage, "Reports must be between -999999 and 999999");
+    return;
+  }
+  updateUser({ adjust_reports: delta }, reportsMessage, "Reports updated");
+  adjustReports.value = "";
 });
 
 saveEmployeesBtn.addEventListener("click", () => {
