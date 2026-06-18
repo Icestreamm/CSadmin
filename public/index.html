@@ -39,7 +39,7 @@
         </header>
 
         <div class="grid">
-          <section class="card" aria-labelledby="usersTitle">
+          <section class="card usersPanel" aria-labelledby="usersTitle">
             <div class="sectionHeader">
               <h2 id="usersTitle">Users</h2>
               <span id="userCount" class="muted small"></span>
@@ -47,7 +47,7 @@
             <label for="searchInput" class="srOnly">Search users</label>
             <input
               id="searchInput"
-              placeholder="Search by email or name"
+              placeholder="Search by username"
               autocomplete="off"
             />
             <div id="usersLoading" class="loading hidden">Loading users…</div>
@@ -58,8 +58,8 @@
                 </caption>
                 <thead>
                   <tr>
-                    <th scope="col">User</th>
-                    <th scope="col">Email</th>
+                    <th scope="col">Username</th>
+                    <th scope="col">Name</th>
                     <th scope="col">Company</th>
                     <th scope="col">Account</th>
                     <th scope="col">Their Manager</th>
@@ -75,12 +75,13 @@
             </div>
           </section>
 
-          <section class="card" aria-labelledby="editTitle">
+          <section class="card editPanel" aria-labelledby="editTitle">
             <h2 id="editTitle">Edit User</h2>
             <p id="editHint" class="muted small">Select a user from the table to edit.</p>
 
-            <label for="email">Email</label>
-            <input id="email" readonly disabled />
+            <div class="editPanelScroll">
+            <label for="username">Username</label>
+            <input id="username" readonly disabled />
 
             <label for="accountRole">Account Type</label>
             <select id="accountRole" disabled>
@@ -88,8 +89,8 @@
               <option value="employee">Employee</option>
             </select>
 
-            <label for="managerEmail">Their Manager <span class="muted small">(employees only)</span></label>
-            <input id="managerEmail" type="email" placeholder="Manager email" disabled />
+            <label for="managerUsername">Their Manager <span class="muted small">(employees only)</span></label>
+            <input id="managerUsername" type="text" placeholder="Manager username" disabled />
             <button id="saveRoleBtn" type="button" class="actionBtn" disabled>
               Save Account Type
             </button>
@@ -120,15 +121,40 @@
             </button>
             <p id="reportsMessage" class="message" role="status"></p>
 
-            <label for="secondary2">Employee Email #1</label>
-            <input id="secondary2" type="email" autocomplete="email" disabled />
+            <h3 class="subheading inviteHeading">Team Employees</h3>
+            <p class="muted small inviteHint">
+              Enter an email and send an invitation. The employee registers and accepts — then they appear in the users table linked to this manager.
+            </p>
 
-            <label for="secondary3">Employee Email #2</label>
-            <input id="secondary3" type="email" autocomplete="email" disabled />
-            <button id="saveEmployeesBtn" type="button" class="actionBtn" disabled>
-              Save Employee Emails
-            </button>
+            <div class="inviteBlock">
+              <label for="employeeEmail1">Employee Email #1</label>
+              <input id="employeeEmail1" type="email" autocomplete="off" disabled />
+              <p id="employeeStatus1" class="inviteStatus muted small"></p>
+              <div class="inviteActions">
+                <button id="inviteEmployee1Btn" type="button" class="actionBtn" disabled>
+                  Send Invitation #1
+                </button>
+                <button id="cancelEmployee1Btn" type="button" class="secondary inviteCancelBtn" disabled>
+                  Cancel
+                </button>
+              </div>
+            </div>
+
+            <div class="inviteBlock">
+              <label for="employeeEmail2">Employee Email #2</label>
+              <input id="employeeEmail2" type="email" autocomplete="off" disabled />
+              <p id="employeeStatus2" class="inviteStatus muted small"></p>
+              <div class="inviteActions">
+                <button id="inviteEmployee2Btn" type="button" class="actionBtn" disabled>
+                  Send Invitation #2
+                </button>
+                <button id="cancelEmployee2Btn" type="button" class="secondary inviteCancelBtn" disabled>
+                  Cancel
+                </button>
+              </div>
+            </div>
             <p id="employeesMessage" class="message" role="status"></p>
+            </div>
           </section>
         </div>
 

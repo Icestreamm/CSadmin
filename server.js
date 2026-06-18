@@ -80,6 +80,7 @@ async function supabaseRpc(name, params = {}) {
       "Content-Type": "application/json",
       apikey: SUPABASE_ANON_KEY,
       Authorization: `Bearer ${adminJwt}`,
+      Prefer: "return=representation",
     },
     body: JSON.stringify(params),
   });
@@ -89,6 +90,76 @@ async function supabaseRpc(name, params = {}) {
     throw new Error(data.message || data.error || `RPC ${name} failed`);
   }
   return data;
+}
+
+function mapAuditRowsToActivity(rows) {
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    kind: "admin",
+    action: row.action,
+    summary: row.note || row.action || "Admin event",
+    created_at: row.created_at,
+    meta: {
+      previous_value: row.previous_value,
+      new_value: row.new_value,
+    },
+  }));
+}
+
+async function fetchUserActivity(targetUserId, limit) {
+  try {
+    const rows = await supabaseRpc("admin_user_activity_for_target", {
+      p_target_user_id: targetUserId,
+      p_limit: limit,
+    });
+    return {
+      rows: Array.isArray(rows) ? rows : [],
+      warning: null,
+    };
+  } catch (primaryError) {
+    const message = String(primaryError.message || primaryError);
+    if (!message.toLowerCase().includes("admin_user_activity_for_target")) {
+      throw primaryError;
+    }
+
+    try {
+      const fallbackRows = await supabaseRpc("admin_audit_log_for_target", {
+        p_target_user_id: targetUserId,
+        p_limit: Math.min(limit, 50),
+      });
+      return {
+        rows: mapAuditRowsToActivity(fallbackRows),
+        warning:
+          "Full activity history unavailable. Run supabase/FIX_ADMIN_USER_HISTORY.sql in Supabase SQL Editor.",
+      };
+    } catch (_) {
+      throw new Error(
+        `${message}. Run supabase/FIX_ADMIN_USER_HISTORY.sql in Supabase SQL Editor.`,
+      );
+    }
+  }
+}
+
+async function fetchUserReports(targetUserId, limit) {
+  try {
+    const rows = await supabaseRpc("admin_reports_for_target", {
+      p_target_user_id: targetUserId,
+      p_limit: limit,
+    });
+    return {
+      rows: Array.isArray(rows) ? rows : [],
+      warning: null,
+    };
+  } catch (error) {
+    const message = String(error.message || error);
+    if (message.toLowerCase().includes("admin_reports_for_target")) {
+      return {
+        rows: [],
+        warning:
+          "Reports list unavailable. Run supabase/FIX_ADMIN_USER_HISTORY.sql in Supabase SQL Editor.",
+      };
+    }
+    throw error;
+  }
 }
 
 async function invokeEdgeFunction(name, body = {}) {
@@ -118,9 +189,61 @@ const MUTATION_FIELDS = [
   "bonus_reports",
   "secondary_2_email",
   "secondary_3_email",
+  "secondary_2_username",
+  "secondary_3_username",
   "role",
   "manager_email",
+  "manager_username",
 ];
+
+async function resolveUsername(username) {
+  const value = String(username || "").trim();
+  if (!value) return null;
+  const rows = await supabaseRpc("admin_resolve_user_by_username", {
+    p_username: value,
+  });
+  const row = Array.isArray(rows) ? rows[0] : rows;
+  if (!row?.user_id) {
+    throw new Error(`Username not found: ${value}`);
+  }
+  return row;
+}
+
+async function mapUsernamesToEmails(body) {
+  const out = { ...body };
+
+  if (body.manager_username !== undefined) {
+    if (!String(body.manager_username || "").trim()) {
+      out.manager_email = null;
+    } else {
+      const row = await resolveUsername(body.manager_username);
+      out.manager_email = row.email;
+    }
+    delete out.manager_username;
+  }
+
+  if (body.secondary_2_username !== undefined) {
+    if (!String(body.secondary_2_username || "").trim()) {
+      out.secondary_2_email = null;
+    } else {
+      const row = await resolveUsername(body.secondary_2_username);
+      out.secondary_2_email = row.email;
+    }
+    delete out.secondary_2_username;
+  }
+
+  if (body.secondary_3_username !== undefined) {
+    if (!String(body.secondary_3_username || "").trim()) {
+      out.secondary_3_email = null;
+    } else {
+      const row = await resolveUsername(body.secondary_3_username);
+      out.secondary_3_email = row.email;
+    }
+    delete out.secondary_3_username;
+  }
+
+  return out;
+}
 
 function presentMutations(body) {
   return MUTATION_FIELDS.filter((field) => body[field] !== undefined);
@@ -140,23 +263,24 @@ function prepareEdgeBody(body) {
 }
 
 async function applyUserUpdate(body) {
-  const targetUserId = String(body.target_user_id || "").trim();
+  const mappedBody = await mapUsernamesToEmails(body);
+  const targetUserId = String(mappedBody.target_user_id || "").trim();
   if (!targetUserId) {
     throw new Error("target_user_id required");
   }
 
-  const mutations = presentMutations(body);
+  const mutations = presentMutations(mappedBody);
 
   if (mutations.length === 1 && mutations[0] === "adjust_days") {
     try {
       return await supabaseRpc("admin_adjust_user_days", {
         p_target_user_id: targetUserId,
-        p_delta: Math.floor(Number(body.adjust_days)),
+        p_delta: Math.floor(Number(mappedBody.adjust_days)),
       });
     } catch (rpcError) {
-      const delta = Math.floor(Number(body.adjust_days));
+      const delta = Math.floor(Number(mappedBody.adjust_days));
       if (delta < 0) throw rpcError;
-      return invokeEdgeFunction("admin-update-user", prepareEdgeBody(body));
+      return invokeEdgeFunction("admin-update-user", prepareEdgeBody(mappedBody));
     }
   }
 
@@ -164,31 +288,36 @@ async function applyUserUpdate(body) {
     try {
       return await supabaseRpc("admin_adjust_user_reports", {
         p_target_user_id: targetUserId,
-        p_delta: Math.floor(Number(body.adjust_reports)),
+        p_delta: Math.floor(Number(mappedBody.adjust_reports)),
       });
     } catch (rpcError) {
-      const delta = Math.floor(Number(body.adjust_reports));
-      if (delta < 0) throw rpcError;
-      return invokeEdgeFunction("admin-update-user", prepareEdgeBody(body));
+      const delta = Math.floor(Number(mappedBody.adjust_reports));
+      if (delta < 0) {
+        throw new Error(
+          `Report deduction requires Supabase RPC admin_adjust_user_reports: ${rpcError.message}`,
+        );
+      }
+      console.warn("admin_adjust_user_reports RPC failed, falling back to edge:", rpcError.message);
+      return invokeEdgeFunction("admin-update-user", mappedBody);
     }
   }
 
-  const edgeBody = prepareEdgeBody(body);
+  const edgeBody = prepareEdgeBody(mappedBody);
 
   try {
     return await invokeEdgeFunction("admin-update-user", edgeBody);
   } catch (error) {
     const msg = String(error.message || "");
-    if (msg.toLowerCase().includes("no changes") && body.adjust_days !== undefined) {
+    if (msg.toLowerCase().includes("no changes") && mappedBody.adjust_days !== undefined) {
       return supabaseRpc("admin_adjust_user_days", {
         p_target_user_id: targetUserId,
-        p_delta: Math.floor(Number(body.adjust_days)),
+        p_delta: Math.floor(Number(mappedBody.adjust_days)),
       });
     }
-    if (msg.toLowerCase().includes("no changes") && body.adjust_reports !== undefined) {
+    if (msg.toLowerCase().includes("no changes") && mappedBody.adjust_reports !== undefined) {
       return supabaseRpc("admin_adjust_user_reports", {
         p_target_user_id: targetUserId,
-        p_delta: Math.floor(Number(body.adjust_reports)),
+        p_delta: Math.floor(Number(mappedBody.adjust_reports)),
       });
     }
     throw error;
@@ -271,11 +400,8 @@ app.get("/api/audit", authMiddleware, async (req, res) => {
   }
 
   try {
-    const rows = await supabaseRpc("admin_user_activity_for_target", {
-      p_target_user_id: targetUserId,
-      p_limit: limit,
-    });
-    return res.json({ rows: Array.isArray(rows) ? rows : [] });
+    const { rows, warning } = await fetchUserActivity(targetUserId, limit);
+    return res.json({ rows, warning });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -290,24 +416,94 @@ app.get("/api/user-detail", authMiddleware, async (req, res) => {
   }
 
   try {
-    const [subscription, activity, reports] = await Promise.all([
-      supabaseRpc("admin_subscription_for_target", {
-        p_target_user_id: targetUserId,
-      }),
-      supabaseRpc("admin_user_activity_for_target", {
-        p_target_user_id: targetUserId,
-        p_limit: activityLimit,
-      }),
-      supabaseRpc("admin_reports_for_target", {
-        p_target_user_id: targetUserId,
-        p_limit: reportsLimit,
-      }),
+    const subscription = await supabaseRpc("admin_subscription_for_target", {
+      p_target_user_id: targetUserId,
+    });
+    const [activityResult, reportsResult] = await Promise.all([
+      fetchUserActivity(targetUserId, activityLimit),
+      fetchUserReports(targetUserId, reportsLimit),
     ]);
+    const warnings = [activityResult.warning, reportsResult.warning].filter(Boolean);
     return res.json({
       subscription: subscription || {},
-      activity: Array.isArray(activity) ? activity : [],
-      reports: Array.isArray(reports) ? reports : [],
+      activity: activityResult.rows,
+      reports: reportsResult.rows,
+      warning: warnings.length ? warnings.join(" ") : null,
     });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/employee-invites", authMiddleware, async (req, res) => {
+  const targetUserId = String(req.query.targetUserId || "").trim();
+  if (!targetUserId) {
+    return res.status(400).json({ error: "targetUserId is required" });
+  }
+
+  try {
+    const data = await supabaseRpc("admin_manager_employee_invites", {
+      p_manager_user_id: targetUserId,
+    });
+    return res.json(data || { slots: [] });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/employee-invite", authMiddleware, async (req, res) => {
+  const targetUserId = String(req.body?.target_user_id || "").trim();
+  const slot = Number(req.body?.slot);
+  const cancel = req.body?.cancel === true;
+  const email = cancel ? null : String(req.body?.email || "").trim() || null;
+
+  if (!targetUserId) {
+    return res.status(400).json({ error: "target_user_id required" });
+  }
+  if (![1, 2].includes(slot)) {
+    return res.status(400).json({ error: "slot must be 1 or 2" });
+  }
+  if (!cancel && !email) {
+    return res.status(400).json({ error: "employee email required" });
+  }
+  if (!cancel && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: "enter a valid email address" });
+  }
+
+  try {
+    const saveResult = await supabaseRpc("admin_save_employee_invite", {
+      p_manager_user_id: targetUserId,
+      p_slot: slot,
+      p_email: email,
+    });
+
+    if (saveResult?.cancelled) {
+      return res.json({ ok: true, cancelled: true, slot });
+    }
+
+    const inviteId = saveResult?.invite_id;
+    if (!inviteId) {
+      return res.status(500).json({ error: "Invite was not created" });
+    }
+
+    try {
+      const sendResult = await invokeEdgeFunction("send-employee-invite", {
+        invite_id: inviteId,
+      });
+      return res.json({
+        ok: true,
+        invite: saveResult,
+        email_sent: Boolean(sendResult.email_sent),
+        accept_link: sendResult.accept_link || null,
+      });
+    } catch (sendErr) {
+      return res.json({
+        ok: true,
+        invite: saveResult,
+        email_sent: false,
+        warning: `Invite saved but email failed: ${sendErr.message}`,
+      });
+    }
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

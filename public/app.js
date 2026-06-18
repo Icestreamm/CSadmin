@@ -10,20 +10,25 @@ const userCount = document.getElementById("userCount");
 const searchInput = document.getElementById("searchInput");
 const editHint = document.getElementById("editHint");
 
-const email = document.getElementById("email");
+const username = document.getElementById("username");
 const accountRole = document.getElementById("accountRole");
-const managerEmail = document.getElementById("managerEmail");
+const managerUsername = document.getElementById("managerUsername");
 const planType = document.getElementById("planType");
 const adjustDays = document.getElementById("adjustDays");
 const adjustReports = document.getElementById("adjustReports");
-const secondary2 = document.getElementById("secondary2");
-const secondary3 = document.getElementById("secondary3");
+const employeeEmail1 = document.getElementById("employeeEmail1");
+const employeeEmail2 = document.getElementById("employeeEmail2");
+const employeeStatus1 = document.getElementById("employeeStatus1");
+const employeeStatus2 = document.getElementById("employeeStatus2");
 
 const updatePlanBtn = document.getElementById("updatePlanBtn");
 const saveRoleBtn = document.getElementById("saveRoleBtn");
 const applyDaysBtn = document.getElementById("applyDaysBtn");
 const applyReportsBtn = document.getElementById("applyReportsBtn");
-const saveEmployeesBtn = document.getElementById("saveEmployeesBtn");
+const inviteEmployee1Btn = document.getElementById("inviteEmployee1Btn");
+const inviteEmployee2Btn = document.getElementById("inviteEmployee2Btn");
+const cancelEmployee1Btn = document.getElementById("cancelEmployee1Btn");
+const cancelEmployee2Btn = document.getElementById("cancelEmployee2Btn");
 
 const planMessage = document.getElementById("planMessage");
 const roleMessage = document.getElementById("roleMessage");
@@ -93,11 +98,136 @@ function accountRoleOf(u) {
   return role === "employee" ? "employee" : "manager";
 }
 
+function displayUsername(u) {
+  if (u.username && String(u.username).trim()) return u.username;
+  if (u.email && u.email.includes("@")) return u.email.split("@")[0];
+  return "—";
+}
+
 function employeeEmails(u) {
-  return (u.secondary_emails || "")
+  return String(u.secondary_emails || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+function employeeSlotDisplay(u, slotIndex) {
+  const email = employeeEmails(u)[slotIndex] || "";
+  const statuses = [u.employee_1_status, u.employee_2_status];
+  const usernames = [u.employee_1_username, u.employee_2_username];
+  const status = statuses[slotIndex];
+  const linkedUsername = usernames[slotIndex];
+
+  if (status === "accepted" && linkedUsername) return linkedUsername;
+  if (status === "pending" && email) return `${email} (pending)`;
+  if (email) return email;
+  return "—";
+}
+
+function inviteStatusText(info) {
+  const status = info?.status || "";
+  if (status === "accepted" && info.username) {
+    return `Linked as ${info.username}`;
+  }
+  if (status === "pending") {
+    return info.email_sent_at
+      ? "Invitation sent — waiting for employee to register and accept"
+      : "Invite created — email pending";
+  }
+  if (status === "declined") return "Invitation declined";
+  if (status === "expired") return "Invitation expired";
+  return "";
+}
+
+function renderInviteSlot(slot, info = {}) {
+  const emailEl = slot === 1 ? employeeEmail1 : employeeEmail2;
+  const statusEl = slot === 1 ? employeeStatus1 : employeeStatus2;
+  const inviteBtn = slot === 1 ? inviteEmployee1Btn : inviteEmployee2Btn;
+  const cancelBtn = slot === 1 ? cancelEmployee1Btn : cancelEmployee2Btn;
+  const status = info.status || "";
+  const linked = status === "accepted";
+  const pending = status === "pending";
+  const isManager = accountRole.value === "manager";
+  const panelEnabled = !accountRole.disabled && isManager;
+
+  emailEl.value = info.email || "";
+  statusEl.textContent = inviteStatusText(info);
+  statusEl.className = `inviteStatus small ${
+    linked ? "linked" : pending ? "pending" : "muted"
+  }`;
+
+  emailEl.disabled = !panelEnabled || linked;
+  inviteBtn.disabled = !panelEnabled || linked;
+  inviteBtn.textContent = pending ? `Resend Invitation #${slot}` : `Send Invitation #${slot}`;
+  cancelBtn.disabled = !panelEnabled || linked || (!info.email && !pending);
+}
+
+async function loadEmployeeInvites(userId) {
+  if (!userId || accountRoleOf(selectedUser || {}) !== "manager") {
+    renderInviteSlot(1, {});
+    renderInviteSlot(2, {});
+    return;
+  }
+  try {
+    const data = await api(
+      `/api/employee-invites?targetUserId=${encodeURIComponent(userId)}`,
+    );
+    const slots = Array.isArray(data.slots) ? data.slots : [];
+    renderInviteSlot(1, slots.find((s) => Number(s.slot) === 1) || {});
+    renderInviteSlot(2, slots.find((s) => Number(s.slot) === 2) || {});
+  } catch (_) {
+    const emails = employeeEmails(selectedUser || {});
+    renderInviteSlot(1, { email: emails[0] || "" });
+    renderInviteSlot(2, { email: emails[1] || "" });
+  }
+}
+
+function reportsQuotaLabel(u) {
+  if (u.reports_usage && u.reports_limit == null && u.admin_bonus_reports == null) {
+    return u.reports_usage;
+  }
+  const used = Number(u.reports_used_this_month ?? 0);
+  const limit = Number(u.reports_limit ?? NaN);
+  const plan = (u.plan_type || "free").toLowerCase();
+  if (Number.isFinite(limit) && limit >= 999999) return `${used} / ∞`;
+  if (Number.isFinite(limit)) return `${used} / ${limit}`;
+  const bonus = Number(u.admin_bonus_reports ?? 0);
+  if (plan === "plus") return `${used} / ∞`;
+  if (plan === "pro") return `${used} / ${40 + bonus}`;
+  return `${used} / ${bonus}`;
+}
+
+function reportsQuotaFromSubscription(sub) {
+  if (!sub) return "—";
+  const used = Number(sub.reports_used_this_month ?? 0);
+  const limit = Number(sub.reports_limit ?? NaN);
+  if (Number.isFinite(limit) && limit >= 999999) return `${used} / ∞ (unlimited)`;
+  if (Number.isFinite(limit)) {
+    const remaining = Number(sub.reports_remaining ?? Math.max(0, limit - used));
+    return `${used} / ${limit} (${remaining} remaining)`;
+  }
+  const plan = (sub.plan_type || "free").toLowerCase();
+  const bonus = Number(sub.admin_bonus_reports ?? 0);
+  const computed =
+    plan === "plus" ? 999999 : plan === "pro" ? 40 + bonus : bonus;
+  if (computed >= 999999) return `${used} / ∞`;
+  return `${used} / ${computed} (${Math.max(0, computed - used)} remaining)`;
+}
+
+function userSearchText(u) {
+  return [
+    displayUsername(u),
+    u.full_name,
+    u.company_name,
+    ...employeeEmails(u),
+    u.employee_1_username,
+    u.employee_2_username,
+    u.manager_username,
+    u.manager_email,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }
 
 function renderUsers(rows) {
@@ -121,7 +251,7 @@ function renderUsers(rows) {
     tr.setAttribute("role", "button");
     tr.setAttribute(
       "aria-label",
-      `Select user ${u.full_name || u.email || "unknown"}`,
+      `Select user ${displayUsername(u)}`,
     );
     tr.setAttribute(
       "aria-selected",
@@ -129,8 +259,8 @@ function renderUsers(rows) {
     );
     if (selectedUserId === u.user_id) tr.classList.add("selected");
 
+    setCell(tr, displayUsername(u));
     setCell(tr, u.full_name || "—");
-    setCell(tr, u.email || "");
     setCell(tr, u.company_name || "—");
 
     const roleTd = document.createElement("td");
@@ -141,7 +271,13 @@ function renderUsers(rows) {
     roleTd.appendChild(roleBadge);
     tr.appendChild(roleTd);
 
-    setCell(tr, role === "employee" ? u.manager_email || "—" : "—");
+    setCell(
+      tr,
+      role === "employee"
+        ? u.manager_username ||
+          (u.manager_email ? displayUsername({ email: u.manager_email }) : "—")
+        : "—",
+    );
 
     const planTd = document.createElement("td");
     const badge = document.createElement("span");
@@ -152,10 +288,9 @@ function renderUsers(rows) {
     tr.appendChild(planTd);
 
     setCell(tr, u.remaining_days ?? "—");
-    setCell(tr, u.reports_usage || "— / —");
-    const employees = employeeEmails(u);
-    setCell(tr, employees[0] || "—");
-    setCell(tr, employees[1] || "—");
+    setCell(tr, reportsQuotaLabel(u));
+    setCell(tr, employeeSlotDisplay(u, 0));
+    setCell(tr, employeeSlotDisplay(u, 1));
 
     tr.addEventListener("click", () => selectUser(u));
     tr.addEventListener("keydown", (e) => {
@@ -170,8 +305,24 @@ function renderUsers(rows) {
 
 function syncManagerFieldState() {
   const isEmployee = accountRole.value === "employee";
-  managerEmail.disabled = !isEmployee || accountRole.disabled;
-  if (!isEmployee) managerEmail.value = "";
+  managerUsername.disabled = !isEmployee || accountRole.disabled;
+  if (!isEmployee) managerUsername.value = "";
+}
+
+function syncEmployeeInviteState() {
+  const isManager = accountRole.value === "manager";
+  if (!isManager || accountRole.disabled) {
+    renderInviteSlot(1, {});
+    renderInviteSlot(2, {});
+    employeeEmail1.disabled = true;
+    employeeEmail2.disabled = true;
+    inviteEmployee1Btn.disabled = true;
+    inviteEmployee2Btn.disabled = true;
+    cancelEmployee1Btn.disabled = true;
+    cancelEmployee2Btn.disabled = true;
+    return;
+  }
+  if (selectedUserId) loadEmployeeInvites(selectedUserId);
 }
 
 function setEditEnabled(enabled) {
@@ -179,29 +330,29 @@ function setEditEnabled(enabled) {
   planType.disabled = !enabled;
   adjustDays.disabled = !enabled;
   adjustReports.disabled = !enabled;
-  secondary2.disabled = !enabled;
-  secondary3.disabled = !enabled;
   updatePlanBtn.disabled = !enabled;
   saveRoleBtn.disabled = !enabled;
   applyDaysBtn.disabled = !enabled;
   applyReportsBtn.disabled = !enabled;
-  saveEmployeesBtn.disabled = !enabled;
   syncManagerFieldState();
+  syncEmployeeInviteState();
   editHint.classList.toggle("hidden", enabled);
 }
 
-function fillForm(u) {
-  email.value = u.email || "";
+async function fillForm(u) {
+  username.value = displayUsername(u);
   accountRole.value = accountRoleOf(u);
-  managerEmail.value = accountRoleOf(u) === "employee" ? u.manager_email || "" : "";
+  managerUsername.value =
+    accountRoleOf(u) === "employee"
+      ? u.manager_username ||
+        (u.manager_email ? displayUsername({ email: u.manager_email }) : "") ||
+        ""
+      : "";
   planType.value = u.plan_type || "free";
   adjustDays.value = "";
   adjustReports.value = "";
-
-  const secondaries = employeeEmails(u);
-  secondary2.value = secondaries[0] || "";
-  secondary3.value = secondaries[1] || "";
   setEditEnabled(true);
+  await loadEmployeeInvites(u.user_id);
 }
 
 function formatDate(iso) {
@@ -223,15 +374,16 @@ function renderSnapshot(sub) {
   }
 
   const items = [
+    ["Username", sub.username || displayUsername(sub)],
     ["Account type", sub.account_role || "manager"],
-    ["Their manager", sub.manager_email || "—"],
+    ["Their manager", sub.manager_username || sub.manager_email || "—"],
     ["Plan", sub.plan_type || "free"],
     ["Billing period", sub.plan_id || "none"],
     ["Status", sub.status || "inactive"],
     ["Access ends", formatDate(sub.access_end || sub.effective_end)],
     ["Trial used", sub.trial_activated ? "Yes" : "No"],
-    ["Reports this month", String(sub.reports_used_this_month ?? 0)],
-    ["Bonus reports", String(sub.admin_bonus_reports ?? 0)],
+    ["Report quota (used / limit)", reportsQuotaFromSubscription(sub)],
+    ["Bonus reports (admin)", String(sub.admin_bonus_reports ?? 0)],
     ["RevenueCat", sub.revenuecat_entitlement || "—"],
   ];
 
@@ -320,13 +472,7 @@ async function loadUsers() {
     const q = searchInput.value.trim().toLowerCase();
     if (q) {
       renderUsers(
-        users.filter((u) => {
-          const em = String(u.email || "").toLowerCase();
-          const nm = String(u.full_name || "").toLowerCase();
-          const emp = employeeEmails(u).join(" ").toLowerCase();
-          const mgr = String(u.manager_email || "").toLowerCase();
-          return em.includes(q) || nm.includes(q) || emp.includes(q) || mgr.includes(q);
-        }),
+        users.filter((u) => userSearchText(u).includes(q)),
       );
     } else {
       renderUsers(users);
@@ -359,6 +505,11 @@ async function loadUserDetail(userId) {
     renderSnapshot(data.subscription);
     renderActivity(data.activity || []);
     renderReports(data.reports || []);
+    if (data.warning && selectedUser) {
+      detailSubtitle.textContent = `${displayUsername(selectedUser)}${
+        selectedUser.full_name ? ` · ${selectedUser.full_name}` : ""
+      } — ${data.warning}`;
+    }
   } catch (error) {
     subscriptionSnapshot.textContent = `Failed to load history: ${error.message}`;
     activityList.innerHTML = "";
@@ -373,19 +524,11 @@ async function selectUser(u) {
   selectedUser = u;
   selectedUserId = u.user_id;
   clearMessages();
-  fillForm(u);
-  detailSubtitle.textContent = `${u.full_name || "User"} · ${u.email || ""}`;
+  await fillForm(u);
+  detailSubtitle.textContent = `${displayUsername(u)}${u.full_name ? ` · ${u.full_name}` : ""}`;
+  const q = searchInput.value.trim().toLowerCase();
   renderUsers(
-    searchInput.value.trim()
-      ? users.filter((x) => {
-          const q = searchInput.value.trim().toLowerCase();
-          const em = String(x.email || "").toLowerCase();
-          const nm = String(x.full_name || "").toLowerCase();
-          const emp = employeeEmails(x).join(" ").toLowerCase();
-          const mgr = String(x.manager_email || "").toLowerCase();
-          return em.includes(q) || nm.includes(q) || emp.includes(q) || mgr.includes(q);
-        })
-      : users,
+    q ? users.filter((x) => userSearchText(x).includes(q)) : users,
   );
   await loadUserDetail(u.user_id);
 }
@@ -397,16 +540,25 @@ async function updateUser(body, messageEl, successText) {
   }
   setMessage(messageEl, "");
   try {
-    await api("/api/update-user", {
+    const result = await api("/api/update-user", {
       method: "POST",
       body: JSON.stringify({ target_user_id: selectedUserId, ...body }),
     });
-    setMessage(messageEl, successText, false);
+    let msg = successText;
+    if (result?.admin_bonus_reports != null) {
+      const used = result.reports_used_this_month ?? selectedUser?.reports_used_this_month ?? 0;
+      const plan = (result.plan_type || selectedUser?.plan_type || "free").toLowerCase();
+      const bonus = Number(result.admin_bonus_reports);
+      const limit =
+        plan === "plus" ? "∞" : plan === "pro" ? String(40 + bonus) : String(bonus);
+      msg = `${successText} — quota now ${used} / ${limit} (bonus: ${bonus})`;
+    }
+    setMessage(messageEl, msg, false);
     await loadUsers();
     const refreshed = users.find((u) => u.user_id === selectedUserId);
     if (refreshed) {
       selectedUser = refreshed;
-      fillForm(refreshed);
+      await fillForm(refreshed);
     }
     await loadUserDetail(selectedUserId);
   } catch (error) {
@@ -420,22 +572,21 @@ searchInput.addEventListener("input", () => {
     renderUsers(users);
     return;
   }
-  renderUsers(
-    users.filter((u) => {
-      const em = String(u.email || "").toLowerCase();
-      const nm = String(u.full_name || "").toLowerCase();
-      const emp = employeeEmails(u).join(" ").toLowerCase();
-      const mgr = String(u.manager_email || "").toLowerCase();
-      return em.includes(q) || nm.includes(q) || emp.includes(q) || mgr.includes(q);
-    }),
-  );
+  renderUsers(users.filter((u) => userSearchText(u).includes(q)));
 });
 
 refreshBtn.addEventListener("click", async () => {
   refreshBtn.disabled = true;
   try {
     await loadUsers();
-    if (selectedUserId) await loadUserDetail(selectedUserId);
+    if (selectedUserId) {
+      const refreshed = users.find((u) => u.user_id === selectedUserId);
+      if (refreshed) {
+        selectedUser = refreshed;
+        await fillForm(refreshed);
+      }
+      await loadUserDetail(selectedUserId);
+    }
   } finally {
     refreshBtn.disabled = false;
   }
@@ -475,20 +626,112 @@ updatePlanBtn.addEventListener("click", () => {
   updateUser({ plan_type: planType.value }, planMessage, "Plan updated");
 });
 
-accountRole.addEventListener("change", syncManagerFieldState);
+accountRole.addEventListener("change", () => {
+  syncManagerFieldState();
+  syncEmployeeInviteState();
+});
+
+async function sendEmployeeInvite(slot) {
+  if (!selectedUserId) {
+    setMessage(employeesMessage, "Select a manager first");
+    return;
+  }
+  if (accountRole.value !== "manager") {
+    setMessage(employeesMessage, "Employee invites are only for manager accounts");
+    return;
+  }
+  const emailEl = slot === 1 ? employeeEmail1 : employeeEmail2;
+  const email = emailEl.value.trim();
+  if (!email) {
+    setMessage(employeesMessage, "Enter the employee email address");
+    return;
+  }
+  const btn = slot === 1 ? inviteEmployee1Btn : inviteEmployee2Btn;
+  btn.disabled = true;
+  setMessage(employeesMessage, "");
+  try {
+    const result = await api("/api/employee-invite", {
+      method: "POST",
+      body: JSON.stringify({
+        target_user_id: selectedUserId,
+        slot,
+        email,
+      }),
+    });
+    const sent = result.email_sent !== false;
+    const msg = sent
+      ? `Invitation sent to ${email}. They must register and accept to appear as an employee.`
+      : result.warning ||
+        `Invite saved for ${email} but email was not sent (check Resend / Supabase invite config).`;
+    setMessage(employeesMessage, msg, !sent);
+    await loadUsers();
+    const refreshed = users.find((u) => u.user_id === selectedUserId);
+    if (refreshed) {
+      selectedUser = refreshed;
+      await loadEmployeeInvites(selectedUserId);
+    }
+    renderUsers(
+      searchInput.value.trim()
+        ? users.filter((u) =>
+            userSearchText(u).includes(searchInput.value.trim().toLowerCase()),
+          )
+        : users,
+    );
+  } catch (error) {
+    setMessage(employeesMessage, error.message);
+  } finally {
+    syncEmployeeInviteState();
+  }
+}
+
+async function cancelEmployeeInvite(slot) {
+  if (!selectedUserId) return;
+  const btn = slot === 1 ? cancelEmployee1Btn : cancelEmployee2Btn;
+  btn.disabled = true;
+  setMessage(employeesMessage, "");
+  try {
+    await api("/api/employee-invite", {
+      method: "POST",
+      body: JSON.stringify({
+        target_user_id: selectedUserId,
+        slot,
+        cancel: true,
+      }),
+    });
+    setMessage(employeesMessage, `Invitation #${slot} cancelled`, false);
+    await loadUsers();
+    await loadEmployeeInvites(selectedUserId);
+    renderUsers(
+      searchInput.value.trim()
+        ? users.filter((u) =>
+            userSearchText(u).includes(searchInput.value.trim().toLowerCase()),
+          )
+        : users,
+    );
+  } catch (error) {
+    setMessage(employeesMessage, error.message);
+  } finally {
+    syncEmployeeInviteState();
+  }
+}
+
+inviteEmployee1Btn.addEventListener("click", () => sendEmployeeInvite(1));
+inviteEmployee2Btn.addEventListener("click", () => sendEmployeeInvite(2));
+cancelEmployee1Btn.addEventListener("click", () => cancelEmployeeInvite(1));
+cancelEmployee2Btn.addEventListener("click", () => cancelEmployeeInvite(2));
 
 saveRoleBtn.addEventListener("click", () => {
   const role = accountRole.value;
   const body = { role };
   if (role === "employee") {
-    const mgr = managerEmail.value.trim();
+    const mgr = managerUsername.value.trim();
     if (!mgr) {
-      setMessage(roleMessage, "Enter the manager email for employee accounts");
+      setMessage(roleMessage, "Enter the manager username for employee accounts");
       return;
     }
-    body.manager_email = mgr;
+    body.manager_username = mgr;
   } else {
-    body.manager_email = null;
+    body.manager_username = null;
   }
   updateUser(body, roleMessage, "Account type updated");
 });
@@ -529,17 +772,6 @@ applyReportsBtn.addEventListener("click", () => {
   }
   updateUser({ adjust_reports: delta }, reportsMessage, "Reports updated");
   adjustReports.value = "";
-});
-
-saveEmployeesBtn.addEventListener("click", () => {
-  updateUser(
-    {
-      secondary_2_email: secondary2.value.trim() || null,
-      secondary_3_email: secondary3.value.trim() || null,
-    },
-    employeesMessage,
-    "Employee emails saved",
-  );
 });
 
 async function bootstrap() {
