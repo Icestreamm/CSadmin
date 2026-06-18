@@ -71,15 +71,52 @@ body {
   flex-shrink: 0;
 }
 
+.usersPanel {
+  display: flex;
+  flex-direction: column;
+}
+
 .usersPanel .tableWrap {
   flex: 1 1 auto;
   min-height: 0;
+  overflow: auto;
+}
+
+.usersTableWrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.usersDataTable {
+  width: max-content;
+  min-width: 100%;
+}
+
+.usersDataTable th,
+.usersDataTable td {
+  white-space: nowrap;
+}
+
+.usersDataTable th:nth-child(2),
+.usersDataTable td:nth-child(2) {
+  min-width: 200px;
+}
+
+.usersDataTable th:nth-child(3),
+.usersDataTable td:nth-child(3) {
+  min-width: 120px;
 }
 
 .editPanel {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.tableWrap {
+  overflow: auto;
+  margin-top: 10px;
 }
 
 .editPanelScroll {

@@ -47,6 +47,7 @@ const reportsLoading = document.getElementById("reportsLoading");
 let users = [];
 let selectedUser = null;
 let selectedUserId = null;
+const USERS_TABLE_COLS = 12;
 
 function setMessage(el, text, isError = true) {
   el.textContent = text || "";
@@ -217,6 +218,8 @@ function reportsQuotaFromSubscription(sub) {
 function userSearchText(u) {
   return [
     displayUsername(u),
+    u.email,
+    u.phone,
     u.full_name,
     u.company_name,
     ...employeeEmails(u),
@@ -237,7 +240,7 @@ function renderUsers(rows) {
   if (!rows.length) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 10;
+    td.colSpan = USERS_TABLE_COLS;
     td.textContent = "No users found";
     td.className = "emptyCell";
     tr.appendChild(td);
@@ -260,6 +263,8 @@ function renderUsers(rows) {
     if (selectedUserId === u.user_id) tr.classList.add("selected");
 
     setCell(tr, displayUsername(u));
+    setCell(tr, u.email || "—");
+    setCell(tr, u.phone || "—");
     setCell(tr, u.full_name || "—");
     setCell(tr, u.company_name || "—");
 
@@ -481,7 +486,7 @@ async function loadUsers() {
     usersTable.innerHTML = "";
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 10;
+    td.colSpan = USERS_TABLE_COLS;
     td.textContent = `Failed to load users: ${error.message}`;
     td.className = "emptyCell error";
     tr.appendChild(td);
