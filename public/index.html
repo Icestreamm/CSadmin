@@ -61,6 +61,8 @@
                     <th scope="col">User</th>
                     <th scope="col">Email</th>
                     <th scope="col">Company</th>
+                    <th scope="col">Account</th>
+                    <th scope="col">Their Manager</th>
                     <th scope="col">Plan</th>
                     <th scope="col">Days</th>
                     <th scope="col">Reports</th>
@@ -79,6 +81,19 @@
 
             <label for="email">Email</label>
             <input id="email" readonly disabled />
+
+            <label for="accountRole">Account Type</label>
+            <select id="accountRole" disabled>
+              <option value="manager">Manager</option>
+              <option value="employee">Employee</option>
+            </select>
+
+            <label for="managerEmail">Their Manager <span class="muted small">(employees only)</span></label>
+            <input id="managerEmail" type="email" placeholder="Manager email" disabled />
+            <button id="saveRoleBtn" type="button" class="actionBtn" disabled>
+              Save Account Type
+            </button>
+            <p id="roleMessage" class="message" role="status"></p>
 
             <label for="planType">Plan <span class="muted small">(independent of days)</span></label>
             <select id="planType" disabled>

@@ -11,6 +11,8 @@ const searchInput = document.getElementById("searchInput");
 const editHint = document.getElementById("editHint");
 
 const email = document.getElementById("email");
+const accountRole = document.getElementById("accountRole");
+const managerEmail = document.getElementById("managerEmail");
 const planType = document.getElementById("planType");
 const adjustDays = document.getElementById("adjustDays");
 const adjustReports = document.getElementById("adjustReports");
@@ -18,11 +20,13 @@ const secondary2 = document.getElementById("secondary2");
 const secondary3 = document.getElementById("secondary3");
 
 const updatePlanBtn = document.getElementById("updatePlanBtn");
+const saveRoleBtn = document.getElementById("saveRoleBtn");
 const applyDaysBtn = document.getElementById("applyDaysBtn");
 const applyReportsBtn = document.getElementById("applyReportsBtn");
 const saveEmployeesBtn = document.getElementById("saveEmployeesBtn");
 
 const planMessage = document.getElementById("planMessage");
+const roleMessage = document.getElementById("roleMessage");
 const daysMessage = document.getElementById("daysMessage");
 const reportsMessage = document.getElementById("reportsMessage");
 const employeesMessage = document.getElementById("employeesMessage");
@@ -46,7 +50,7 @@ function setMessage(el, text, isError = true) {
 }
 
 function clearMessages() {
-  [planMessage, daysMessage, reportsMessage, employeesMessage].forEach((el) =>
+  [planMessage, roleMessage, daysMessage, reportsMessage, employeesMessage].forEach((el) =>
     setMessage(el, ""),
   );
 }
@@ -80,6 +84,15 @@ function setCell(tr, text) {
   tr.appendChild(td);
 }
 
+function roleBadgeClass(role) {
+  return role === "employee" ? "badge employee" : "badge manager";
+}
+
+function accountRoleOf(u) {
+  const role = (u.account_role || "manager").toLowerCase();
+  return role === "employee" ? "employee" : "manager";
+}
+
 function employeeEmails(u) {
   return (u.secondary_emails || "")
     .split(",")
@@ -94,7 +107,7 @@ function renderUsers(rows) {
   if (!rows.length) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 8;
+    td.colSpan = 10;
     td.textContent = "No users found";
     td.className = "emptyCell";
     tr.appendChild(td);
@@ -119,6 +132,16 @@ function renderUsers(rows) {
     setCell(tr, u.full_name || "—");
     setCell(tr, u.email || "");
     setCell(tr, u.company_name || "—");
+
+    const roleTd = document.createElement("td");
+    const roleBadge = document.createElement("span");
+    const role = accountRoleOf(u);
+    roleBadge.className = roleBadgeClass(role);
+    roleBadge.textContent = role;
+    roleTd.appendChild(roleBadge);
+    tr.appendChild(roleTd);
+
+    setCell(tr, role === "employee" ? u.manager_email || "—" : "—");
 
     const planTd = document.createElement("td");
     const badge = document.createElement("span");
@@ -145,21 +168,32 @@ function renderUsers(rows) {
   });
 }
 
+function syncManagerFieldState() {
+  const isEmployee = accountRole.value === "employee";
+  managerEmail.disabled = !isEmployee || accountRole.disabled;
+  if (!isEmployee) managerEmail.value = "";
+}
+
 function setEditEnabled(enabled) {
+  accountRole.disabled = !enabled;
   planType.disabled = !enabled;
   adjustDays.disabled = !enabled;
   adjustReports.disabled = !enabled;
   secondary2.disabled = !enabled;
   secondary3.disabled = !enabled;
   updatePlanBtn.disabled = !enabled;
+  saveRoleBtn.disabled = !enabled;
   applyDaysBtn.disabled = !enabled;
   applyReportsBtn.disabled = !enabled;
   saveEmployeesBtn.disabled = !enabled;
+  syncManagerFieldState();
   editHint.classList.toggle("hidden", enabled);
 }
 
 function fillForm(u) {
   email.value = u.email || "";
+  accountRole.value = accountRoleOf(u);
+  managerEmail.value = accountRoleOf(u) === "employee" ? u.manager_email || "" : "";
   planType.value = u.plan_type || "free";
   adjustDays.value = "";
   adjustReports.value = "";
@@ -189,6 +223,8 @@ function renderSnapshot(sub) {
   }
 
   const items = [
+    ["Account type", sub.account_role || "manager"],
+    ["Their manager", sub.manager_email || "—"],
     ["Plan", sub.plan_type || "free"],
     ["Billing period", sub.plan_id || "none"],
     ["Status", sub.status || "inactive"],
@@ -288,7 +324,8 @@ async function loadUsers() {
           const em = String(u.email || "").toLowerCase();
           const nm = String(u.full_name || "").toLowerCase();
           const emp = employeeEmails(u).join(" ").toLowerCase();
-          return em.includes(q) || nm.includes(q) || emp.includes(q);
+          const mgr = String(u.manager_email || "").toLowerCase();
+          return em.includes(q) || nm.includes(q) || emp.includes(q) || mgr.includes(q);
         }),
       );
     } else {
@@ -298,7 +335,7 @@ async function loadUsers() {
     usersTable.innerHTML = "";
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 8;
+    td.colSpan = 10;
     td.textContent = `Failed to load users: ${error.message}`;
     td.className = "emptyCell error";
     tr.appendChild(td);
@@ -344,7 +381,9 @@ async function selectUser(u) {
           const q = searchInput.value.trim().toLowerCase();
           const em = String(x.email || "").toLowerCase();
           const nm = String(x.full_name || "").toLowerCase();
-          return em.includes(q) || nm.includes(q);
+          const emp = employeeEmails(x).join(" ").toLowerCase();
+          const mgr = String(x.manager_email || "").toLowerCase();
+          return em.includes(q) || nm.includes(q) || emp.includes(q) || mgr.includes(q);
         })
       : users,
   );
@@ -386,7 +425,8 @@ searchInput.addEventListener("input", () => {
       const em = String(u.email || "").toLowerCase();
       const nm = String(u.full_name || "").toLowerCase();
       const emp = employeeEmails(u).join(" ").toLowerCase();
-      return em.includes(q) || nm.includes(q) || emp.includes(q);
+      const mgr = String(u.manager_email || "").toLowerCase();
+      return em.includes(q) || nm.includes(q) || emp.includes(q) || mgr.includes(q);
     }),
   );
 });
@@ -433,6 +473,24 @@ logoutBtn.addEventListener("click", async () => {
 
 updatePlanBtn.addEventListener("click", () => {
   updateUser({ plan_type: planType.value }, planMessage, "Plan updated");
+});
+
+accountRole.addEventListener("change", syncManagerFieldState);
+
+saveRoleBtn.addEventListener("click", () => {
+  const role = accountRole.value;
+  const body = { role };
+  if (role === "employee") {
+    const mgr = managerEmail.value.trim();
+    if (!mgr) {
+      setMessage(roleMessage, "Enter the manager email for employee accounts");
+      return;
+    }
+    body.manager_email = mgr;
+  } else {
+    body.manager_email = null;
+  }
+  updateUser(body, roleMessage, "Account type updated");
 });
 
 applyDaysBtn.addEventListener("click", () => {

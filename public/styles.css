@@ -253,6 +253,16 @@ tbody tr[aria-selected="true"] {
   color: #b54708;
 }
 
+.badge.manager {
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.badge.employee {
+  background: #f4f3ff;
+  color: #5925dc;
+}
+
 .snapshot {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
