@@ -110,6 +110,91 @@ async function invokeEdgeFunction(name, body = {}) {
   return data;
 }
 
+const MUTATION_FIELDS = [
+  "plan_type",
+  "adjust_days",
+  "bonus_days",
+  "adjust_reports",
+  "bonus_reports",
+  "secondary_2_email",
+  "secondary_3_email",
+  "role",
+  "manager_email",
+];
+
+function presentMutations(body) {
+  return MUTATION_FIELDS.filter((field) => body[field] !== undefined);
+}
+
+function prepareEdgeBody(body) {
+  const edgeBody = { ...body };
+  if (edgeBody.adjust_days !== undefined && edgeBody.bonus_days === undefined) {
+    const delta = Math.floor(Number(edgeBody.adjust_days));
+    if (delta > 0) edgeBody.bonus_days = delta;
+  }
+  if (edgeBody.adjust_reports !== undefined && edgeBody.bonus_reports === undefined) {
+    const delta = Math.floor(Number(edgeBody.adjust_reports));
+    if (delta > 0) edgeBody.bonus_reports = delta;
+  }
+  return edgeBody;
+}
+
+async function applyUserUpdate(body) {
+  const targetUserId = String(body.target_user_id || "").trim();
+  if (!targetUserId) {
+    throw new Error("target_user_id required");
+  }
+
+  const mutations = presentMutations(body);
+
+  if (mutations.length === 1 && mutations[0] === "adjust_days") {
+    try {
+      return await supabaseRpc("admin_adjust_user_days", {
+        p_target_user_id: targetUserId,
+        p_delta: Math.floor(Number(body.adjust_days)),
+      });
+    } catch (rpcError) {
+      const delta = Math.floor(Number(body.adjust_days));
+      if (delta < 0) throw rpcError;
+      return invokeEdgeFunction("admin-update-user", prepareEdgeBody(body));
+    }
+  }
+
+  if (mutations.length === 1 && mutations[0] === "adjust_reports") {
+    try {
+      return await supabaseRpc("admin_adjust_user_reports", {
+        p_target_user_id: targetUserId,
+        p_delta: Math.floor(Number(body.adjust_reports)),
+      });
+    } catch (rpcError) {
+      const delta = Math.floor(Number(body.adjust_reports));
+      if (delta < 0) throw rpcError;
+      return invokeEdgeFunction("admin-update-user", prepareEdgeBody(body));
+    }
+  }
+
+  const edgeBody = prepareEdgeBody(body);
+
+  try {
+    return await invokeEdgeFunction("admin-update-user", edgeBody);
+  } catch (error) {
+    const msg = String(error.message || "");
+    if (msg.toLowerCase().includes("no changes") && body.adjust_days !== undefined) {
+      return supabaseRpc("admin_adjust_user_days", {
+        p_target_user_id: targetUserId,
+        p_delta: Math.floor(Number(body.adjust_days)),
+      });
+    }
+    if (msg.toLowerCase().includes("no changes") && body.adjust_reports !== undefined) {
+      return supabaseRpc("admin_adjust_user_reports", {
+        p_target_user_id: targetUserId,
+        p_delta: Math.floor(Number(body.adjust_reports)),
+      });
+    }
+    throw error;
+  }
+}
+
 async function getAdminJwt() {
   if (adminAuthCache && adminAuthCache.expiresAtMs > Date.now() + 60 * 1000) {
     return adminAuthCache.accessToken;
@@ -230,7 +315,7 @@ app.get("/api/user-detail", authMiddleware, async (req, res) => {
 
 app.post("/api/update-user", authMiddleware, async (req, res) => {
   try {
-    const result = await invokeEdgeFunction("admin-update-user", req.body || {});
+    const result = await applyUserUpdate(req.body || {});
     return res.json(result);
   } catch (error) {
     return res.status(500).json({ error: error.message });
