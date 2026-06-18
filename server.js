@@ -180,17 +180,49 @@ app.get("/api/users", authMiddleware, async (req, res) => {
 
 app.get("/api/audit", authMiddleware, async (req, res) => {
   const targetUserId = String(req.query.targetUserId || "").trim();
-  const limit = Number(req.query.limit || 5);
+  const limit = Number(req.query.limit || 50);
   if (!targetUserId) {
     return res.status(400).json({ error: "targetUserId is required" });
   }
 
   try {
-    const rows = await supabaseRpc("admin_audit_log_for_target", {
+    const rows = await supabaseRpc("admin_user_activity_for_target", {
       p_target_user_id: targetUserId,
       p_limit: limit,
     });
     return res.json({ rows: Array.isArray(rows) ? rows : [] });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/user-detail", authMiddleware, async (req, res) => {
+  const targetUserId = String(req.query.targetUserId || "").trim();
+  const activityLimit = Number(req.query.activityLimit || 50);
+  const reportsLimit = Number(req.query.reportsLimit || 100);
+  if (!targetUserId) {
+    return res.status(400).json({ error: "targetUserId is required" });
+  }
+
+  try {
+    const [subscription, activity, reports] = await Promise.all([
+      supabaseRpc("admin_subscription_for_target", {
+        p_target_user_id: targetUserId,
+      }),
+      supabaseRpc("admin_user_activity_for_target", {
+        p_target_user_id: targetUserId,
+        p_limit: activityLimit,
+      }),
+      supabaseRpc("admin_reports_for_target", {
+        p_target_user_id: targetUserId,
+        p_limit: reportsLimit,
+      }),
+    ]);
+    return res.json({
+      subscription: subscription || {},
+      activity: Array.isArray(activity) ? activity : [],
+      reports: Array.isArray(reports) ? reports : [],
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

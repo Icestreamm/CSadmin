@@ -13,7 +13,7 @@
   <body>
     <main class="container">
       <section id="loginView" class="card" aria-labelledby="loginTitle">
-        <h1 id="loginTitle">CarSee Admin Access- online</h1>
+        <h1 id="loginTitle">CarSee Admin Access</h1>
         <p class="muted">Enter the shared password to continue.</p>
         <form id="loginForm" novalidate>
           <label for="password">Password</label>
@@ -31,19 +31,26 @@
 
       <section id="appView" class="hidden" aria-labelledby="appTitle">
         <header class="topbar card">
-          <h1 id="appTitle">Subscription Managerr</h1>
-          <button id="logoutBtn" class="secondary" type="button">Logout</button>
+          <h1 id="appTitle">Subscription Manager</h1>
+          <div class="topbarActions">
+            <button id="refreshBtn" class="secondary" type="button">Refresh</button>
+            <button id="logoutBtn" class="secondary" type="button">Logout</button>
+          </div>
         </header>
 
         <div class="grid">
           <section class="card" aria-labelledby="usersTitle">
-            <h2 id="usersTitle">Users</h2>
+            <div class="sectionHeader">
+              <h2 id="usersTitle">Users</h2>
+              <span id="userCount" class="muted small"></span>
+            </div>
             <label for="searchInput" class="srOnly">Search users</label>
             <input
               id="searchInput"
               placeholder="Search by email or name"
               autocomplete="off"
             />
+            <div id="usersLoading" class="loading hidden">Loading users…</div>
             <div class="tableWrap">
               <table>
                 <caption class="srOnly">
@@ -66,41 +73,76 @@
 
           <section class="card" aria-labelledby="editTitle">
             <h2 id="editTitle">Edit User</h2>
-            <form id="editForm" novalidate>
-              <label for="targetUserId">User ID</label>
-              <input id="targetUserId" readonly />
+            <p id="editHint" class="muted small">Select a user from the table to edit.</p>
 
-              <label for="email">Email</label>
-              <input id="email" readonly />
+            <label for="email">Email</label>
+            <input id="email" readonly disabled />
 
-              <label for="planType">Plan</label>
-              <select id="planType">
-                <option value="free">Free</option>
-                <option value="pro">Pro</option>
-                <option value="plus">Plus</option>
-              </select>
+            <label for="planType">Plan <span class="muted small">(independent of days)</span></label>
+            <select id="planType" disabled>
+              <option value="free">Free</option>
+              <option value="pro">Pro</option>
+              <option value="plus">Plus</option>
+            </select>
+            <button id="updatePlanBtn" type="button" class="actionBtn" disabled>
+              Update Plan Only
+            </button>
+            <p id="planMessage" class="message" role="status"></p>
 
-              <label for="bonusDays">Bonus Days</label>
-              <input id="bonusDays" type="number" min="0" />
+            <label for="adjustDays">Adjust Days <span class="muted small">(+ add / − deduct)</span></label>
+            <input id="adjustDays" type="number" placeholder="e.g. 30 or -7" disabled />
+            <button id="applyDaysBtn" type="button" class="actionBtn" disabled>
+              Apply Days Change
+            </button>
+            <p id="daysMessage" class="message" role="status"></p>
 
-              <label for="bonusReports">Bonus Reports</label>
-              <input id="bonusReports" type="number" min="0" />
+            <label for="bonusReports">Add Bonus Reports</label>
+            <input id="bonusReports" type="number" min="1" placeholder="Amount to add" disabled />
+            <button id="applyReportsBtn" type="button" class="actionBtn" disabled>
+              Add Bonus Reports
+            </button>
+            <p id="reportsMessage" class="message" role="status"></p>
 
-              <label for="secondary2">Employee Email #1</label>
-              <input id="secondary2" type="email" autocomplete="email" />
+            <label for="secondary2">Employee Email #1</label>
+            <input id="secondary2" type="email" autocomplete="email" disabled />
 
-              <label for="secondary3">Employee Email #2</label>
-              <input id="secondary3" type="email" autocomplete="email" />
-
-              <button id="saveBtn" type="submit">Save Changes</button>
-            </form>
-            <p id="saveMessage" class="message" role="status" aria-live="polite"></p>
+            <label for="secondary3">Employee Email #2</label>
+            <input id="secondary3" type="email" autocomplete="email" disabled />
+            <button id="saveEmployeesBtn" type="button" class="actionBtn" disabled>
+              Save Employee Emails
+            </button>
+            <p id="employeesMessage" class="message" role="status"></p>
           </section>
         </div>
 
-        <section class="card" aria-labelledby="auditTitle">
-          <h2 id="auditTitle">Recent Audit</h2>
-          <ul id="auditList"></ul>
+        <section id="userDetailSection" class="card hidden" aria-labelledby="detailTitle">
+          <h2 id="detailTitle">User History</h2>
+          <p id="detailSubtitle" class="muted"></p>
+
+          <div id="subscriptionSnapshot" class="snapshot"></div>
+
+          <h3 class="subheading">Activity Log <span class="muted small">(last 50)</span></h3>
+          <div id="activityLoading" class="loading hidden">Loading activity…</div>
+          <ul id="activityList" class="timeline"></ul>
+
+          <h3 class="subheading">Reports</h3>
+          <div id="reportsLoading" class="loading hidden">Loading reports…</div>
+          <div class="tableWrap">
+            <table id="reportsTable">
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">Customer</th>
+                  <th scope="col">Plate</th>
+                  <th scope="col">Vehicle</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Cost</th>
+                  <th scope="col">Photos</th>
+                </tr>
+              </thead>
+              <tbody id="reportsTableBody"></tbody>
+            </table>
+          </div>
         </section>
       </section>
     </main>
